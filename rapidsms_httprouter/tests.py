@@ -15,6 +15,9 @@ from rapidsms.models import Backend, Connection
 from rapidsms.apps.base import AppBase
 from rapidsms.messages.outgoing import OutgoingMessage
 from django.conf import settings
+from django.core.management import call_command
+from qos_messages import gen_qos_msg, get_alarms, get_backends_by_type, gen_qos_msg
+from datetime import datetime
 
 class TestResponse(object):
     def getcode(self):
@@ -161,6 +164,28 @@ class RouterTest(TestCase):
         # allow letters, maybe shortcodes are using mappings to numbers
         msg4 = router.add_message('test', 'asdfASDF', 'test', 'I', 'P')
         self.assertEquals('asdfasdf', msg4.connection.identity)
+
+    def testAddBulk(self):
+        connection2 = Connection.objects.create(backend=self.backend, identity='8675309')
+        connection3 = Connection.objects.create(backend=self.backend, identity='8675310')
+        connection4 = Connection.objects.create(backend=self.backend, identity='8675311')
+
+        # test that mass texting works with a single number
+        msgs = Message.mass_text('Jenny I got your number', [self.connection])
+
+        self.assertEquals(msgs.count(), 1)
+        self.assertEquals(msgs[0].text, 'Jenny I got your number')
+
+        # test no connections are re-created
+        self.assertEquals(msgs[0].connection.pk, self.connection.pk)
+
+        msgs = Message.mass_text('Jenny dont change your number', [self.connection, connection2, connection3, connection4], status='L')
+        self.assertEquals(str(msgs.values_list('status', flat=True).distinct()[0]), 'L')
+        self.assertEquals(msgs.count(), 4)
+
+        # test duplicate connections don't create duplicate messages
+        msgs = Message.mass_text('Turbo King is the greatest!', [self.connection, self.connection])
+        self.assertEquals(msgs.count(), 1)
 
     def testRouter(self):
         router = get_router()
@@ -409,3 +434,71 @@ class ViewTest(TestCase):
             self.assertEquals('D', message.status)
         finally:
             settings.ROUTER_PASSWORD = None
+
+class QOSTest(TestCase):
+    def setUp(self):
+        dct = dict(getattr(settings, 'MODEM_BACKENDS', {}).items() + getattr(settings, 'SHORTCODE_BACKENDS', {}).items())
+#        dct = dict(getattr(settings, 'MODEM_BACKENDS', {}).items())
+        for bkend, identity in dct.items():
+            Connection.objects.create(identity=identity, backend=Backend.objects.create(name=bkend))
+        
+        for shortcode_backend, backend_names in settings.ALLOWED_MODEMS.items():
+            identity = settings.SHORTCODE_BACKENDS[shortcode_backend]
+            for bkend in backend_names:
+                Connection.objects.create(identity=identity, backend=Backend.objects.get(name=bkend))
+            
+    def fake_incoming(self, message, connection=None):
+        if connection is None:
+            connection = self.connection
+        router = get_router()
+        router.handle_incoming(connection.backend.name, connection.identity, message)
+
+    def testMsgsSent(self):
+        #Jenifer sends out messages to all short codes (6767, 8500) via the various modems (mtn-modem, utl-modem) etc
+        call_command('send_qos_messages')
+        self.assertEquals(Message.objects.filter(direction='O').count(), 13)
+        for msg in Message.objects.filter(direction='O'):
+            self.assertEquals(msg.text, datetime.now().strftime('%Y-%m-%d %H'))
+        self.assertEquals(Message.objects.filter(direction='O', connection__identity='6767').count(), 4)
+        self.assertEquals(Message.objects.filter(direction='O', connection__identity='8500').count(), 4)
+        self.assertEquals(Message.objects.filter(direction='O', connection__identity='6200').count(), 3)
+        self.assertEquals(Message.objects.filter(direction='O', connection__identity='8200').count(), 2)
+
+    def testNoAlarms(self):
+        #Jenifer sends out messages to all short codes (6767, 8500) via the various modems (mtn-modem, utl-modem) etc
+        call_command('send_qos_messages')
+        
+        #Through the various apps, all short codes send back replies to Jennifer
+        for connection in Connection.objects.filter(backend__name__endswith='modem'):
+            self.fake_incoming(datetime.now().strftime('%Y-%m-%d %H'), connection)
+            
+        #Jennifer kicks in with the monitoring service
+        call_command('monitor_qos_messages')
+        alarms = get_alarms()
+        
+        #no alarms expected since all apps replied
+        self.assertEquals(len(alarms), 0)
+
+    def testAlarms(self):
+        #Jenifer sends out messages to all short codes (6767, 8500) via the various modems (mtn-modem, utl-modem) etc
+        call_command('send_qos_messages')
+        
+        #Only a few modems reply with messages to Jenny
+        for connection in Connection.objects.filter(backend__name__endswith='modem').exclude(identity__in=['256777773260', '256752145316', '256711957281', '256701205129'])[:5]:
+            self.fake_incoming(datetime.now().strftime('%Y-%m-%d %H'), connection)
+        
+        #Jennifer kicks in with the monitoring service
+        call_command('monitor_qos_messages')
+        alarms = get_alarms()
+        
+        #Jenny complains about her missing replies
+        self.assertEquals(len(alarms), 8)
+        
+        #Poor Jenny spams everyone in protest
+        msgs = []
+        for msg in Message.objects.filter(direction='O').exclude(connection__identity__in=Message.objects.filter(direction='I').values_list('connection__identity')):
+            identity = msg.connection.identity
+            modem = msg.connection.backend
+            network = msg.connection.backend.name.split('-')[0]
+            msgs.append('Jennifer did not get a reply from %s using the %s, %s appears to be down!' % (identity, modem, network.upper()))
+        self.assertEquals(msgs, get_alarms())

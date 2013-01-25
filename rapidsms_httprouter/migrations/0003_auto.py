@@ -1,66 +1,24 @@
-<<<<<<< HEAD
-# -*- coding: utf-8 -*-
-=======
 # encoding: utf-8
->>>>>>> 54e6dc0feb1d0aa954114dd14b5ba7b7883d5ad1
 import datetime
 from south.db import db
 from south.v2 import SchemaMigration
 from django.db import models
 
-<<<<<<< HEAD
-
-class Migration(SchemaMigration):
-
-    def forwards(self, orm):
-=======
 class Migration(SchemaMigration):
 
     def forwards(self, orm):
         
-        # Adding model 'MessageBatch'
-        db.create_table('rapidsms_httprouter_messagebatch', (
-            ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
-            ('status', self.gf('django.db.models.fields.CharField')(max_length=1)),
-        ))
-        db.send_create_signal('rapidsms_httprouter', ['MessageBatch'])
-
->>>>>>> 54e6dc0feb1d0aa954114dd14b5ba7b7883d5ad1
-        # Adding model 'Message'
-        db.create_table('rapidsms_httprouter_message', (
-            ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
-            ('connection', self.gf('django.db.models.fields.related.ForeignKey')(related_name='messages', to=orm['rapidsms.Connection'])),
-            ('text', self.gf('django.db.models.fields.TextField')()),
-            ('direction', self.gf('django.db.models.fields.CharField')(max_length=1)),
-            ('status', self.gf('django.db.models.fields.CharField')(max_length=1)),
-            ('date', self.gf('django.db.models.fields.DateTimeField')(auto_now_add=True, blank=True)),
-<<<<<<< HEAD
-            ('in_response_to', self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name='responses', null=True, to=orm['rapidsms_httprouter.Message'])),
-=======
-            ('priority', self.gf('django.db.models.fields.IntegerField')(default=10)),
-            ('in_response_to', self.gf('django.db.models.fields.related.ForeignKey')(related_name='responses', null=True, to=orm['rapidsms_httprouter.Message'])),
-            ('application', self.gf('django.db.models.fields.CharField')(max_length=100, null=True)),
-            ('batch', self.gf('django.db.models.fields.related.ForeignKey')(related_name='messages', null=True, to=orm['rapidsms_httprouter.MessageBatch'])),
->>>>>>> 54e6dc0feb1d0aa954114dd14b5ba7b7883d5ad1
-        ))
-        db.send_create_signal('rapidsms_httprouter', ['Message'])
+        # Adding index on 'Message', fields ['text']
+        db.create_index('rapidsms_httprouter_message', ['text'])
 
 
     def backwards(self, orm):
-<<<<<<< HEAD
-=======
         
-        # Deleting model 'MessageBatch'
-        db.delete_table('rapidsms_httprouter_messagebatch')
-
->>>>>>> 54e6dc0feb1d0aa954114dd14b5ba7b7883d5ad1
-        # Deleting model 'Message'
-        db.delete_table('rapidsms_httprouter_message')
+        # Removing index on 'Message', fields ['text']
+        db.delete_index('rapidsms_httprouter_message', ['text'])
 
 
     models = {
-<<<<<<< HEAD
-=======
         'auth.group': {
             'Meta': {'object_name': 'Group'},
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
@@ -124,7 +82,6 @@ class Migration(SchemaMigration):
             'latitude': ('django.db.models.fields.DecimalField', [], {'max_digits': '13', 'decimal_places': '10'}),
             'longitude': ('django.db.models.fields.DecimalField', [], {'max_digits': '13', 'decimal_places': '10'})
         },
->>>>>>> 54e6dc0feb1d0aa954114dd14b5ba7b7883d5ad1
         'rapidsms.backend': {
             'Meta': {'object_name': 'Backend'},
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
@@ -139,14 +96,6 @@ class Migration(SchemaMigration):
         },
         'rapidsms.contact': {
             'Meta': {'object_name': 'Contact'},
-<<<<<<< HEAD
-            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'language': ('django.db.models.fields.CharField', [], {'max_length': '6', 'blank': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '100', 'blank': 'True'})
-        },
-        'rapidsms_httprouter.message': {
-            'Meta': {'object_name': 'Message'},
-=======
             'active': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'birthdate': ('django.db.models.fields.DateTimeField', [], {'null': 'True'}),
             'gender': ('django.db.models.fields.CharField', [], {'max_length': '1', 'null': 'True'}),
@@ -164,24 +113,14 @@ class Migration(SchemaMigration):
             'Meta': {'object_name': 'Message'},
             'application': ('django.db.models.fields.CharField', [], {'max_length': '100', 'null': 'True'}),
             'batch': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'messages'", 'null': 'True', 'to': "orm['rapidsms_httprouter.MessageBatch']"}),
->>>>>>> 54e6dc0feb1d0aa954114dd14b5ba7b7883d5ad1
             'connection': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'messages'", 'to': "orm['rapidsms.Connection']"}),
             'date': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
-            'direction': ('django.db.models.fields.CharField', [], {'max_length': '1'}),
+            'direction': ('django.db.models.fields.CharField', [], {'max_length': '1', 'db_index': 'True'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-<<<<<<< HEAD
-            'in_response_to': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "'responses'", 'null': 'True', 'to': "orm['rapidsms_httprouter.Message']"}),
-            'status': ('django.db.models.fields.CharField', [], {'max_length': '1'}),
-            'text': ('django.db.models.fields.TextField', [], {})
-        }
-    }
-
-    complete_apps = ['rapidsms_httprouter']
-=======
             'in_response_to': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'responses'", 'null': 'True', 'to': "orm['rapidsms_httprouter.Message']"}),
-            'priority': ('django.db.models.fields.IntegerField', [], {'default': '10'}),
-            'status': ('django.db.models.fields.CharField', [], {'max_length': '1'}),
-            'text': ('django.db.models.fields.TextField', [], {})
+            'priority': ('django.db.models.fields.IntegerField', [], {'default': '10', 'db_index': 'True'}),
+            'status': ('django.db.models.fields.CharField', [], {'max_length': '1', 'db_index': 'True'}),
+            'text': ('django.db.models.fields.TextField', [], {'db_index': 'True'})
         },
         'rapidsms_httprouter.messagebatch': {
             'Meta': {'object_name': 'MessageBatch'},
@@ -191,4 +130,3 @@ class Migration(SchemaMigration):
     }
 
     complete_apps = ['rapidsms_httprouter']
->>>>>>> 54e6dc0feb1d0aa954114dd14b5ba7b7883d5ad1

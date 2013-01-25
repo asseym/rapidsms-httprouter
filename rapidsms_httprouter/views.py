@@ -3,8 +3,10 @@ import json
 from django import forms
 from django.http import HttpResponse
 from django.template import RequestContext
-from django.shortcuts import render_to_response
 from django.conf import settings
+from django.shortcuts import render_to_response, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.db.models import Q
 from django.core.paginator import *
 from django.views.decorators.csrf import csrf_exempt
@@ -18,6 +20,7 @@ from django.core.mail import send_mail
 
 from .models import Message
 from .router import get_router
+from.tasks import handle_incoming
 
 
 class SecureForm(forms.Form):
@@ -66,12 +69,28 @@ def receive(request):
     response['message'] = message.as_json()
     response['responses'] = [m.as_json() for m in message.responses.all()]
     response['status'] = "Message handled."
-
+    
     # do we default to having silent responses?  200 means success in this case
     if getattr(settings, "ROUTER_SILENT", False) and (not 'echo' in data or not data['echo']):
         return HttpResponse()
     else:
         return HttpResponse(json.dumps(response))
+
+    # if getattr(settings,'CELERY_MESSAGE_PROCESSING',None):
+    #         handle_incoming.delay(get_router(),data['backend'], data['sender'], data['message'])
+    #         return HttpResponse("celery handler")
+    #     else:
+    #         message = get_router().handle_incoming(data['backend'], data['sender'], data['message'])
+    #         response = {}
+    #         response['message'] = message.as_json()
+    #         response['responses'] = [m.as_json() for m in message.responses.all()]
+    #         response['status'] = "Message handled."
+    # 
+    #         # do we default to having silent responses?  200 means success in this case
+    #         if getattr(settings, "ROUTER_SILENT", False) and (not 'echo' in data or not data['echo']):
+    #             return HttpResponse()
+    #         else:
+    #             return HttpResponse(json.dumps(response))
 
 
 @csrf_exempt
@@ -157,6 +176,16 @@ def delivered(request):
     return HttpResponse(json.dumps(dict(status="Message marked as sent.")))
 
 
+def can_send(request, message_id):
+    message = get_object_or_404(Message, pk=message_id)
+    send_msg = get_router().process_outgoing_phases(message)
+
+    # if it wasn't cancelled, send it off
+    if send_msg:
+        return HttpResponse(status=200)
+    else:
+        return HttpResponse(status=403)
+
 class MessageTable(Table):
     # this is temporary, until i fix ModelTable!
     text = Column()
@@ -191,11 +220,10 @@ def console(request):
     form = SendForm()
     reply_form = ReplyForm()
     search_form = SearchForm()
-
     queryset = Message.objects.all()
 
-    if request.method == 'POST':
-        if request.REQUEST['action'] == 'test':
+    if request.method == 'POST' and 'this_is_the_login_form' not in request.POST:
+        if request.POST['action'] == 'test':
             form = SendForm(request.POST)
             if form.is_valid():
                 backend = "console"
@@ -204,7 +232,7 @@ def console(request):
                                                        form.cleaned_data['text'])
             reply_form = ReplyForm()
 
-        elif request.REQUEST['action'] == 'reply':
+        elif request.POST['action'] == 'reply':
             reply_form = ReplyForm(request.POST)
             if reply_form.is_valid():
                 if Connection.objects.filter(identity=reply_form.cleaned_data['recipient']).count():
@@ -230,6 +258,7 @@ def console(request):
 
                 queryset = queryset.filter(query)
 
+
     paginator = Paginator(queryset.order_by('-id'), 20)
     page = request.REQUEST.get('page')
     try:
@@ -250,3 +279,15 @@ def console(request):
             "sms_messages": messages
         }, context_instance=RequestContext(request)
     )
+
+@login_required
+def summary(request):
+    messages = Message.objects.extra(
+                   {'year':'extract(year from date)',
+                    'month':'extract (month from date)'})\
+               .values('year', 'month', 'connection__backend__name', 'direction')\
+               .annotate(total=Count('id'))\
+               .extra(order_by=['year', 'month', 'connection__backend__name', 'direction'])
+    return render_to_response(
+        "router/summary.html",
+        { 'messages': messages}, context_instance=RequestContext(request))
