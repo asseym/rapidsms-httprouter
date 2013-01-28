@@ -20,7 +20,7 @@ from django.core.mail import send_mail
 
 from .models import Message
 from .router import get_router
-from.tasks import handle_incoming
+from .tasks import handle_incoming
 
 
 class SecureForm(forms.Form):

@@ -15,6 +15,14 @@ import re
 import datetime
 import traceback
 
+def start_sending_mass_messages():
+    "Deprecated"
+    pass
+
+def stop_sending_mass_messages():
+    "Deprecated"
+    pass
+
 class HttpRouter(object, LoggerMixin):
     """
     This is a simplified version of the normal SMS router in that it has no threading.  Instead
